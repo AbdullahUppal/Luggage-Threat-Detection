@@ -1,9 +1,9 @@
 # Luggage Threat Detection
 
 ## Project Status
-This repository is currently in development.
+This repository is currently being revamped.
 
-The codebase contains exploratory and legacy implementations, and the final unified training/inference pipeline is still being consolidated.
+The codebase contains exploratory and legacy implementations, and the final unified training/inference pipeline is still being consolidated (in legacy implementation branch).
 
 ## Issue Statement
 Detecting prohibited items in luggage is important for public safety in places such as airports, malls, and cargo terminals. Manual screening is slow, labor-intensive, and prone to human error due to fatigue and workload.
