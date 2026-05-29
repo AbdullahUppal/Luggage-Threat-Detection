@@ -17,9 +17,6 @@ The project goal is to build an automated computer vision system that can:
 https://drive.google.com/file/d/1bYLJDkE4hu52kihmjm95CCDjCUUXPTVl/view?usp=sharing
 
 
-## Results / Report
-https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view
-
 
 ### Required Tasks
 1. Classification
@@ -37,6 +34,9 @@ https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sha
 - Both sets contain class folders and annotation masks.
 - Threat classes mentioned in the assignment: gun, knife, shuriken.
 - Safe images are included as non-threat samples.
+
+## Results / Report
+https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view
 
 ### Evaluation Metrics
 Classification metrics:
