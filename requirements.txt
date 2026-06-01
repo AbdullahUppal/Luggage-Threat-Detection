@@ -1,4 +1,4 @@
-pandas
-opencv-python
-python-dotenv
-keras
+pandas==3.0.3
+opencv-python==4.13.0.92
+python-dotenv==1.2.2
+keras==3.14.1
