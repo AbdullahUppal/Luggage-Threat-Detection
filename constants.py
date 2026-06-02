@@ -3,7 +3,7 @@ import os
 
 loadenv()
 
-
+TRAIN_THREAT=os.getenv("TRAIN_THREAT")
 
 TRAIN_KNIFE=os.getenv("TRAIN_KNIFE")
 TRAIN_GUN=os.getenv("TRAIN_GUN")
