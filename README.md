@@ -1,7 +1,5 @@
 # Luggage Threat Detection
 
-## Model Training Results
-![Model Training report](image.png)
 
 ## Project Status
 This repository is currently being revamped.
@@ -40,6 +38,9 @@ https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sha
 - Both sets contain class folders and annotation masks.
 - Threat classes mentioned in the assignment: gun, knife, shuriken.
 - Safe images are included as non-threat samples.
+
+## Model Training Results
+![Model Training report](image.png)
 
 ### Evaluation Metrics
 Classification metrics:
