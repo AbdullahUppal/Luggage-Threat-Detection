@@ -1,6 +1,6 @@
 # Luggage Threat Detection
 
-## Model Training Reselt
+## Model Training Results
 ![Model Training report](image.png)
 
 ## Project Status
