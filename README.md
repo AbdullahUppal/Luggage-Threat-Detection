@@ -1,5 +1,8 @@
 # Luggage Threat Detection
 
+## Model Training Reselt
+![Model Training report](image.png)
+
 ## Project Status
 This repository is currently being revamped.
 

@@ -10,6 +10,9 @@ from keras.optimizers import Adam
 # from keras.preprocessing.image import *
 from tensorflow import data
 
+from constants import TRAIN_CLASSIFICATION
+
+
 class Classification_Model:
     def __init__(self):    
         classes = 2
@@ -36,7 +39,7 @@ class Classification_Model:
         x = Dense(8, activation='relu', name='Dense_3', dtype='float32')(x)
         x = Dense(classes, activation='softmax', name='Output', dtype='float32')(x)
         self.my_model = Model(inputs=[inputs], outputs=[x])
-        my_optimizer = Adam(lr=0.00001)
+        my_optimizer = Adam(learning_rate=0.00001)
         self.my_model.compile(loss='categorical_crossentropy', optimizer=my_optimizer, metrics=['categorical_accuracy'])
         # my_model.summary()
     
@@ -50,8 +53,7 @@ class Classification_Model:
 
     def train(self):
 
-        # 1. Define the path to your main dataset folder
-        dataset_dir = "path/to/your/dataset/" # Update this to your actual folder path
+        dataset_dir = TRAIN_CLASSIFICATION
 
         # 2. Load the training data
         # We use a validation split to keep 20% of the data for testing
@@ -60,9 +62,9 @@ class Classification_Model:
             validation_split=0.2,
             subset="training",
             seed=123,
-            image_size=(512, 512), # Matches your Input layer
-            batch_size=16,         # Adjust based on your GPU memory
-            label_mode='categorical' # Matches your 'categorical_crossentropy' loss
+            image_size=(512, 512), 
+            batch_size=16,         
+            label_mode='categorical'
         )
 
         # 3. Load the validation data

@@ -3,3 +3,4 @@ opencv-python==4.13.0.92
 python-dotenv==1.2.2
 keras==3.14.1
 matplotlib==3.10.9
+tensorflow==2.21.0
