@@ -1,7 +1,7 @@
-from dotenv import loadenv
+from dotenv import load_dotenv
 import os
 
-loadenv()
+load_dotenv()
 
 TRAIN_THREAT=os.getenv("TRAIN_THREAT")
 
@@ -24,3 +24,5 @@ TEST_GUN_ANNOTATION=os.getenv("TEST_GUN_ANNOTATION")
 TEST_SHURIKEN_ANNOTATION=os.getenv("TEST_SHURIKEN_ANNOTATION")
 
 TRAIN_CLASSIFICATION=os.getenv("TRAIN_CLASSIFICATION")
+
+TEST=os.getenv("TEST")

@@ -1,21 +1,23 @@
 import cv2 as cv
-from constants import *
-
+from config.classification_model import Classification_Model
+import os
+from constants import TRAIN_CLASSIFICATION, TEST
 class Processing():
-
     # This init will act as the main process function of the class
     def __init__(self):
-        self.load_train_paths()
+        self.classify_image()
+        
+    def classify_image(self):
+        model = Classification_Model()
+        if not os.path.exists("model/classification_model.h5"):
+            model.train(TRAIN_CLASSIFICATION)
+        model.load_model()
+        model.predict_class(TEST)
 
-    def load_train_paths(self):
-        tr_knife = os.listdir(TRAIN_KNIFE)
-        tr_knife_ann = os.listdir(TRAIN_KNIFE_ANNOTATION)
-        tr_gun = os.listdir(TRAIN_GUN)
-        tr_gun_ann = os.listdir(TRAIN_GUN_ANNOTATION)
-        tr_shuriken = os.listdir(TRAIN_SHURIKEN)
-        tr_shuriken_ann = os.listdir(TRAIN_SHURIKEN_ANNOTATION)
+        
 
-        tr_safe = os.listdir(TRAIN_SAFE)
+
+    
     
 
         

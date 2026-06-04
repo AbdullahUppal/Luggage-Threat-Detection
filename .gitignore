@@ -1,7 +1,37 @@
-old
-DIP_data_upload
-DIP Data Upload
+# Legacy experiments / archived code
+old/
+
+# Dataset folders (both naming variants)
+DIP_data_upload/
+DIP Data Upload/
+
+# Local environments
 .env
-.venv
+.venv/
+venv/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Project docs/artifacts
 Project_DIP.pdf
 
+# model directory
+model/
+.model/*
