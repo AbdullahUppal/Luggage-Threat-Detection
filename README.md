@@ -98,10 +98,6 @@ python main.py
 - Comprehensive evaluation reporting
 - Documentation and sample outputs
 
-## Results
-
-![Model Training Report](image.png)
-
 For detailed results and analysis, see the [full report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view).
 
 ## License
