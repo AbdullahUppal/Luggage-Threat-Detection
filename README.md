@@ -1,69 +1,115 @@
 # Luggage Threat Detection
 
+A computer vision system for automated detection of prohibited items in luggage for enhanced public safety at airports, malls, and cargo terminals.
 
-## Project Status
-This repository is currently being revamped.
+## Project Overview
 
-The codebase contains exploratory and legacy implementations, and the final unified training/inference pipeline is still being consolidated (in legacy implementation branch).
+This project implements an automated system that:
+1. **Classifies** baggage images as safe or threat
+2. **Identifies** threat types (gun, knife, shuriken)
+3. **Segments** threat object regions from baggage images
 
-## Issue Statement
-Detecting prohibited items in luggage is important for public safety in places such as airports, malls, and cargo terminals. Manual screening is slow, labor-intensive, and prone to human error due to fatigue and workload.
+## Current Implementation
 
-The project goal is to build an automated computer vision system that can:
-1. Classify a baggage image as safe or threat.
-2. If threat is present, identify the threat type.
-3. Segment the threat object region from the baggage image.
+The codebase has been consolidated into a modular pipeline with the following structure:
 
-### Complete statement document
-https://drive.google.com/file/d/1bYLJDkE4hu52kihmjm95CCDjCUUXPTVl/view?usp=sharing
+### Core Components
 
+- **`main.py`** - Entry point for the pipeline
+- **`processing.py`** - Main processing orchestration
+  - Segmentation model training and inference
+  - Classification model training and inference
+- **`constants.py`** - Configuration and path constants
+- **`config/`** - Model configuration modules
+  - `segmentation_model.py` - Segmentation model implementation
+  - `classification_model.py` - Classification model implementation
 
-## Results / Report
-https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view
+### Dependencies
 
+```
+pandas==3.0.3
+opencv-python==4.13.0.92
+python-dotenv==1.2.2
+keras==3.14.1
+matplotlib==3.10.9
+tensorflow==2.21.0
+```
 
-### Required Tasks
-1. Classification
-- Classify each input image as safe or threat.
-- For threat images, target categories include: gun, knife, and shuriken.
+## Dataset
 
-2. Segmentation
-- Perform pixel-level segmentation of the threat object in baggage images using provided masks.
+The system uses a structured dataset with:
+- **Threat classes:** gun, knife, shuriken
+- **Safe images:** non-threat samples
+- **Structure:** Train/test splits with corresponding annotation masks
+- **Details:** See [Dataset folder](https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing)
 
-### Dataset details
-https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing
+## Model Architecture
 
-### Dataset Summary
-- Data is split into train and test sets.
-- Both sets contain class folders and annotation masks.
-- Threat classes mentioned in the assignment: gun, knife, shuriken.
-- Safe images are included as non-threat samples.
+### Segmentation Pipeline
+- Trains on annotated threat images
+- Uses mask-based supervision for pixel-level segmentation
+- Model saved to `model/segmentation_model.pt`
 
-## Model Training Results
-![Model Training report](image.png)
+### Classification Pipeline
+- Classifies images as safe or threat
+- Supports multi-class threat categorization
+- Model saved to `model/classification_model.pt`
 
-### Evaluation Metrics
-Classification metrics:
+## Evaluation Metrics
+
+### Classification
 - Overall accuracy
 - Confusion matrix
-- Dice score
+- Per-class precision, recall, F1-score
 
-Segmentation metric:
+### Segmentation
 - Dice coefficient (F1 score)
+- Intersection over Union (IoU)
 
-## Current Development Direction
-The active development target is to:
-1. Refactor experimental scripts into a clean, modular pipeline.
-2. Standardize preprocessing and label/mask loading.
-3. Implement a reproducible train/test workflow for both classification and segmentation.
-4. Add consistent evaluation reporting (accuracy, confusion matrix, Dice).
-5. Finalize documentation and sample outputs.
+## Configuration
 
-## Planned Structure (Work in Progress)
-- data loading and preprocessing
-- classification model training and evaluation
-- segmentation model training and evaluation
-- inference scripts
-- results and visualizations
-- report-ready metrics tables
+Environment variables are loaded via `.env` file. Key paths configured in `constants.py`:
 
+- `TRAIN_*` - Training data paths for each threat class
+- `TEST_*` - Test data paths
+- `*_ANNOTATION` - Segmentation mask paths
+
+## Usage
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure dataset paths in .env file
+# Run the pipeline
+python main.py
+```
+
+## Project Status
+
+✅ **Completed:**
+- Modular pipeline architecture
+- Standardized preprocessing
+- Reproducible train/test workflow
+- Model training and evaluation for both tasks
+
+🔄 **In Progress:**
+- Fine-tuning model performance
+- Comprehensive evaluation reporting
+- Documentation and sample outputs
+
+## Results
+
+![Model Training Report](image.png)
+
+For detailed results and analysis, see the [full report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view).
+
+## License
+
+This project is for research and security screening purposes.
+
+## References
+
+- [Project Statement](https://drive.google.com/file/d/1bYLJDkE4hu52kihmjm95CCDjCUUXPTVl/view?usp=sharing)
+- [Dataset](https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing)
+- [Results Report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view)
