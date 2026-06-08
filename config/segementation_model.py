@@ -1,187 +1,234 @@
-
-from keras.utils import image_dataset_from_directory
-from keras.models import Model, load_model
-from keras.layers import Input, Conv2D, BatchNormalization, MaxPooling2D, UpSampling2D, concatenate, Dropout, Flatten, Dense
-from keras.optimizers import Adam
+import os
+import random
 from pathlib import Path
-import tensorflow as tf
-class SegmentationModel():
+from typing import List, Tuple
+
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
+class UNet(nn.Module):
     def __init__(self):
-        input_shape = (512, 512, 3)
-        inputs = Input(input_shape)
-        c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
-        c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(c1)
-        p1 = MaxPooling2D((2, 2))(c1)
+        super().__init__()
+        self.down1 = DoubleConv(3, 32)
+        self.pool1 = nn.MaxPool2d(2)
+        self.down2 = DoubleConv(32, 64)
+        self.pool2 = nn.MaxPool2d(2)
+        self.down3 = DoubleConv(64, 128)
+        self.pool3 = nn.MaxPool2d(2)
+        self.down4 = DoubleConv(128, 256)
+        self.pool4 = nn.MaxPool2d(2)
 
-        c2 = Conv2D(128, (3, 3), activation='relu', padding='same')(p1)
-        c2 = Conv2D(128, (3, 3), activation='relu', padding='same')(c2)
-        p2 = MaxPooling2D((2, 2))(c2)
+        self.bottleneck = DoubleConv(256, 512)
 
-        c3 = Conv2D(256, (3, 3), activation='relu', padding='same')(p2)
-        c3 = Conv2D(256, (3, 3), activation='relu', padding='same')(c3)
-        p3 = MaxPooling2D((2, 2))(c3)
+        self.up4 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec4 = DoubleConv(512, 256)
+        self.up3 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec3 = DoubleConv(256, 128)
+        self.up2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec2 = DoubleConv(128, 64)
+        self.up1 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        self.dec1 = DoubleConv(64, 32)
 
-        c4 = Conv2D(512, (3, 3), activation='relu', padding='same')(p3)
-        c4 = Conv2D(512, (3, 3), activation='relu', padding='same')(c4)
-        p4 = MaxPooling2D((2, 2))(c4)
+        self.out_conv = nn.Conv2d(32, 1, kernel_size=1)
 
-        c5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(p4)
-        c5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(c5)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x1 = self.down1(x)
+        x2 = self.down2(self.pool1(x1))
+        x3 = self.down3(self.pool2(x2))
+        x4 = self.down4(self.pool3(x3))
+        xb = self.bottleneck(self.pool4(x4))
 
-        u6 = UpSampling2D((2, 2))(c5)
-        u6 = concatenate([u6, c4])
-        c6 = Conv2D(512, (3, 3), activation='relu', padding='same')(u6)
-        c6 = Conv2D(512, (3, 3), activation='relu', padding='same')(c6)
+        x = self.up4(xb)
+        x = self.dec4(torch.cat([x, x4], dim=1))
+        x = self.up3(x)
+        x = self.dec3(torch.cat([x, x3], dim=1))
+        x = self.up2(x)
+        x = self.dec2(torch.cat([x, x2], dim=1))
+        x = self.up1(x)
+        x = self.dec1(torch.cat([x, x1], dim=1))
 
-        u7 = UpSampling2D((2, 2))(c6)
-        u7 = concatenate([u7, c3])
-        c7 = Conv2D(256, (3, 3), activation='relu', padding='same')(u7)
-        c7 = Conv2D(256, (3, 3), activation='relu', padding='same')(c7)
+        return self.out_conv(x)
 
-        u8 = UpSampling2D((2, 2))(c7)
-        u8 = concatenate([u8, c2])
-        c8 = Conv2D(128, (3, 3), activation='relu', padding='same')(u8)
-        c8 = Conv2D(128, (3, 3), activation='relu', padding='same')(c8)
 
-        u9 = UpSampling2D((2, 2))(c8)
-        u9 = concatenate([u9, c1])
-        c9 = Conv2D(64, (3, 3), activation='relu', padding='same')(u9)
-        c9 = Conv2D(64, (3, 3), activation='relu', padding='same')(c9)
+class SegmentationThreatDataset(Dataset):
+    def __init__(self, pairs: List[Tuple[str, str]], image_size: Tuple[int, int] = (512, 512)):
+        self.pairs = pairs
+        self.image_size = image_size
 
-        outputs = Conv2D(1, (1, 1), activation='sigmoid')(c9)
+    def __len__(self) -> int:
+        return len(self.pairs)
 
-        self.model = Model(inputs=[inputs], outputs=[outputs])
-        self.model.compile(optimizer=Adam(), loss='binary_crossentropy', metrics=['accuracy'])
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        image_path, mask_path = self.pairs[idx]
 
-    def train_segmentation(self, train_root, annotation_root, epochs=20, batch_size=8):
-        train_dataset, val_dataset = self.prepare_segmentation_data(
-            train_root,
-            annotation_root
-        )
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError(f"Unable to read image: {image_path}")
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.resize(image, self.image_size, interpolation=cv2.INTER_LINEAR)
+        image = image.astype(np.float32) / 255.0
+        image = np.transpose(image, (2, 0, 1))
 
-        history = self.model.fit(
-            train_dataset,
-            validation_data=val_dataset,
-            epochs=epochs
-        )
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            raise ValueError(f"Unable to read mask: {mask_path}")
+        mask = cv2.resize(mask, self.image_size, interpolation=cv2.INTER_NEAREST)
+        mask = (mask > 127).astype(np.float32)
+        mask = np.expand_dims(mask, axis=0)
 
-        self.model.save("model/segmentation_model.keras")
-        return history
+        return torch.from_numpy(image), torch.from_numpy(mask)
 
-    def prepare_segmentation_data(self, train_root, annotation_root):
-        class_names = ["GUN", "knife", "shuriken"]
 
-        image_paths, mask_paths = self.collect_image_mask_pairs(
-            train_root,
-            annotation_root,
-            class_names
-        )
+class SegmentationModel:
+    def __init__(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = UNet().to(self.device)
+        self.model_path = "model/segmentation_model.pt"
 
-        train_images, train_masks, val_images, val_masks = self.split_pairs(
-            image_paths,
-            mask_paths
-        )
+        if self.device.type == "cuda":
+            print(f"PyTorch runtime: using GPU ({torch.cuda.get_device_name(0)})")
+        else:
+            print("PyTorch runtime: using CPU")
 
-        train_dataset = self.make_dataset(train_images, train_masks, batch_size=8, training=True)
-        val_dataset = self.make_dataset(val_images, val_masks, batch_size=8, training=False)
+    def collect_image_mask_pairs(self, image_root: str, mask_root: str, class_names: List[str]) -> List[Tuple[str, str]]:
+        pairs: List[Tuple[str, str]] = []
 
-        return train_dataset, val_dataset
-
-    def collect_image_mask_pairs(self, image_root, mask_root, class_names):
-        image_paths = []
-        mask_paths = []
+        mask_dirs = {}
+        for d in Path(mask_root).iterdir():
+            if d.is_dir():
+                mask_dirs[d.name.lower()] = d
 
         for class_name in class_names:
             image_dir = Path(image_root) / class_name
-            mask_dir = Path(mask_root) / class_name
-
-            if not image_dir.exists() or not mask_dir.exists():
+            mask_dir = mask_dirs.get(class_name.lower())
+            if not image_dir.exists() or mask_dir is None:
                 continue
 
             for image_path in sorted(image_dir.iterdir()):
                 if not image_path.is_file():
                     continue
-
                 mask_path = mask_dir / image_path.name
                 if mask_path.exists():
-                    image_paths.append(str(image_path))
-                    mask_paths.append(str(mask_path))
+                    pairs.append((str(image_path), str(mask_path)))
 
-        if not image_paths:
+        if not pairs:
             raise ValueError("No image-mask pairs found.")
 
-        return image_paths, mask_paths
+        return pairs
 
-    def collect_safe_pairs(safe_root):
-        image_paths = []
+    def prepare_segmentation_data(
+        self,
+        train_root: str,
+        annotation_root: str,
+        batch_size: int = 8,
+        train_ratio: float = 0.8,
+        seed: int = 123,
+    ) -> Tuple[DataLoader, DataLoader]:
+        class_names = ["GUN", "knife", "shuriken"]
+        pairs = self.collect_image_mask_pairs(train_root, annotation_root, class_names)
 
-        safe_dir = Path(safe_root)
-        if not safe_dir.exists():
-            return image_paths
+        random.seed(seed)
+        random.shuffle(pairs)
 
-        for image_path in sorted(safe_dir.iterdir()):
-            if image_path.is_file():
-                image_paths.append(str(image_path))
+        split_idx = int(len(pairs) * train_ratio)
+        train_pairs = pairs[:split_idx]
+        val_pairs = pairs[split_idx:]
 
-        return image_paths
+        if not train_pairs or not val_pairs:
+            raise ValueError("Not enough image-mask pairs to split into train and validation sets.")
 
-    def split_pairs(self, image_paths, mask_paths, train_ratio=0.8, seed=123):
-        total = len(image_paths)
+        train_dataset = SegmentationThreatDataset(train_pairs)
+        val_dataset = SegmentationThreatDataset(val_pairs)
 
-        indices = tf.range(total)
-        indices = tf.random.shuffle(indices, seed=seed)
+        pin_memory = self.device.type == "cuda"
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=pin_memory,
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=pin_memory,
+        )
 
-        image_paths = tf.gather(tf.constant(image_paths), indices)
-        mask_paths = tf.gather(tf.constant(mask_paths), indices)
+        return train_loader, val_loader
 
-        split_index = int(total * train_ratio)
+    def train_segmentation(self, train_root: str, annotation_root: str, epochs: int = 20, batch_size: int = 8):
+        train_loader, val_loader = self.prepare_segmentation_data(
+            train_root=train_root,
+            annotation_root=annotation_root,
+            batch_size=batch_size,
+        )
 
-        train_images = image_paths[:split_index]
-        train_masks = mask_paths[:split_index]
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
-        val_images = image_paths[split_index:]
-        val_masks = mask_paths[split_index:]
+        for epoch in range(epochs):
+            self.model.train()
+            train_loss_sum = 0.0
 
-        return train_images, train_masks, val_images, val_masks
+            for images, masks in train_loader:
+                images = images.to(self.device, non_blocking=True)
+                masks = masks.to(self.device, non_blocking=True)
 
-    def load_image(self, image_path, image_size=(512, 512)):
-        image_bytes = tf.io.read_file(image_path)
-        image = tf.io.decode_image(image_bytes, channels=3, expand_animations=False)
-        image = tf.image.resize(image, image_size, method='bilinear')
-        image = tf.cast(image, tf.float32) / 255.0
-        return image
-    
-    def load_mask(self, mask_path, image_size=(512, 512)):
-        mask_bytes = tf.io.read_file(mask_path)
-        mask = tf.io.decode_image(mask_bytes, channels=1, expand_animations=False)
-        mask = tf.image.resize(mask, image_size, method='nearest')
-        mask = tf.cast(mask, tf.float32) / 255.0
-        mask = tf.where(mask > 0.5, 1.0, 0.0)
-        return mask
-    
-    def load_pair(self, image_path, mask_path):
-        image = self.load_image(image_path)
-        mask = self.load_mask(mask_path)
-        return image, mask
+                optimizer.zero_grad()
+                logits = self.model(images)
+                loss = criterion(logits, masks)
+                loss.backward()
+                optimizer.step()
 
-    def load_safe_pair(self, image_path, image_size=(512, 512)):
-        image = self.load_image(image_path, image_size)
-        mask = tf.zeros((image_size[0], image_size[1], 1), dtype=tf.float32)
-        return image, mask
+                train_loss_sum += loss.item()
 
-    def make_dataset(self, image_paths, mask_paths, batch_size=8, training=True):
-        dataset = tf.data.Dataset.from_tensor_slices((image_paths, mask_paths))
-        dataset = dataset.map(self.load_pair, num_parallel_calls=tf.data.AUTOTUNE)
+            self.model.eval()
+            val_loss_sum = 0.0
+            with torch.no_grad():
+                for images, masks in val_loader:
+                    images = images.to(self.device, non_blocking=True)
+                    masks = masks.to(self.device, non_blocking=True)
+                    logits = self.model(images)
+                    val_loss_sum += criterion(logits, masks).item()
 
-        if training:
-            dataset = dataset.shuffle(512, seed=123)
+            train_loss = train_loss_sum / len(train_loader)
+            val_loss = val_loss_sum / len(val_loader)
+            print(f"Epoch {epoch + 1}/{epochs} | train_loss: {train_loss:.4f} | val_loss: {val_loss:.4f}")
 
-        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-        return dataset
+        os.makedirs("model", exist_ok=True)
+        torch.save(self.model.state_dict(), self.model_path)
+        print(f"Saved PyTorch segmentation model to {self.model_path}")
 
     def load_model(self):
-       self.model = load_model('model/classification_model.h5')
-       return self.model
+        if not os.path.exists(self.model_path):
+            raise FileNotFoundError(f"Model file not found: {self.model_path}")
+        state_dict = torch.load(self.model_path, map_location=self.device)
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device)
+        self.model.eval()
+        return self.model
 
-    def segment_threat(Self):
+    def segment_threat(self):
         pass
