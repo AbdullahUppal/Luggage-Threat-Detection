@@ -2,12 +2,15 @@ import os
 import random
 from pathlib import Path
 from typing import List, Tuple
+from PIL import Image
 
 import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+
+from torchvision import transforms
 
 
 class DoubleConv(nn.Module):
@@ -93,7 +96,7 @@ class SegmentationThreatDataset(Dataset):
         if mask is None:
             raise ValueError(f"Unable to read mask: {mask_path}")
         mask = cv2.resize(mask, self.image_size, interpolation=cv2.INTER_NEAREST)
-        mask = (mask > 127).astype(np.float32)
+        mask = (mask > 0).astype(np.float32)
         mask = np.expand_dims(mask, axis=0)
 
         return torch.from_numpy(image), torch.from_numpy(mask)
@@ -230,5 +233,28 @@ class SegmentationModel:
         self.model.eval()
         return self.model
 
-    def segment_threat(self):
-        pass
+    def segment_threat(self, filepath, save_path='../DIP Data Upload/result/', threshold=0.1):
+        # Load image (RGB) and keep original size for final mask
+        input_image = Image.open(filepath).convert("RGB")
+        original_w, original_h = input_image.size
+
+        # Match training preprocessing: resize + [0,1] scale only
+        resized = input_image.resize((512, 512))
+        image_np = np.array(resized).astype(np.float32) / 255.0          # H,W,C
+        image_np = np.transpose(image_np, (2, 0, 1))                     # C,H,W
+        input_tensor = torch.from_numpy(image_np).unsqueeze(0).to(self.device)
+
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(input_tensor)                             # [1,1,H,W]
+            probs = torch.sigmoid(logits)                                 # [0,1]
+            pred = (probs >= threshold).float()                            # binary mask
+
+        # Convert to uint8 image (0 or 255)
+        mask = pred[0, 0].detach().cpu().numpy().astype(np.uint8) * 255  # H,W
+        mask_img = Image.fromarray(mask, mode="L").resize((original_w, original_h), Image.NEAREST)
+
+        if save_path is not None:
+            mask_img.save(save_path)
+
+        return mask_img
