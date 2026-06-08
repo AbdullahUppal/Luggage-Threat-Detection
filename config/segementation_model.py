@@ -1,10 +1,14 @@
 
-from keras.utils import image_dataset_from_directory
 from keras.models import Model, load_model
-from keras.layers import Input, Conv2D, BatchNormalization, MaxPooling2D, UpSampling2D, concatenate, Dropout, Flatten, Dense
+from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate
 from keras.optimizers import Adam
 from pathlib import Path
 import tensorflow as tf
+import cv2 as cv
+import numpy as np
+from constants import RESULT
+
+
 class SegmentationModel():
     def __init__(self):
         input_shape = (512, 512, 3)
@@ -180,8 +184,42 @@ class SegmentationModel():
         return dataset
 
     def load_model(self):
-       self.model = load_model('model/classification_model.h5')
-       return self.model
+        model_path_keras = Path("model/segmentation_model.keras")
+        model_path_h5 = Path("model/segmentation_model.h5")
 
-    def segment_threat(Self):
-        pass
+        if model_path_keras.exists():
+            self.model = load_model(str(model_path_keras))
+        elif model_path_h5.exists():
+            self.model = load_model(str(model_path_h5))
+        else:
+            raise FileNotFoundError("No segmentation model found in model/ directory.")
+
+        return self.model
+
+    def segment_threat(self, image_path, threshold=0.5, save_output=True):
+        image = cv.imread(image_path)
+        if image is None:
+            raise ValueError(f"Could not read image: {image_path}")
+
+        original_h, original_w = image.shape[:2]
+        resized = cv.resize(image, (512, 512), interpolation=cv.INTER_LINEAR)
+        input_tensor = resized.astype(np.float32) / 255.0
+        input_tensor = np.expand_dims(input_tensor, axis=0)
+
+        prediction = self.model.predict(input_tensor, verbose=0)[0, :, :, 0]
+        binary_mask = (prediction >= threshold).astype(np.uint8)
+        binary_mask = cv.resize(binary_mask, (original_w, original_h), interpolation=cv.INTER_NEAREST)
+        binary_mask = (binary_mask * 255).astype(np.uint8)
+
+        overlay = image.copy()
+        overlay[binary_mask > 0] = [0, 0, 255]
+        blended = cv.addWeighted(image, 0.7, overlay, 0.3, 0)
+
+        if save_output:
+            
+            result_annotation_path = str(Path(RESULT + '\\segment_images').with_name(f"{Path(image_path).stem}.png"))
+            resulted_image_path = str(Path(RESULT + '\\result_annotation').with_name(f"{Path(image_path).stem}.png"))
+            cv.imwrite(resulted_image_path, binary_mask)
+            cv.imwrite(result_annotation_path, blended)
+
+        return binary_mask, blended
