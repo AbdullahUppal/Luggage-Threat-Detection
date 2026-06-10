@@ -9,26 +9,46 @@ class Processing():
         
     def segment_image(self):
         segment_model = SegmentationModel()
-        if not os.path.exists("model/segmentation_model.pt"):
+        has_keras = os.path.exists("model/segmentation_model.keras")
+        has_h5 = os.path.exists("model/segmentation_model.h5")
+
+        if not has_keras and not has_h5:
             segment_model.train_segmentation(
                 train_root=TRAIN,
                 annotation_root=TRAIN_ANNOTATION,
                 epochs=20,
-                batch_size=8
+                batch_size=2
             )
         segment_model.load_model()
+        filepaths = self._getfilepaths(TEST)
+
+        for image_path in filepaths:
+            binary_mask, segmented_image = segment_model.segment_threat(image_path)
 
     def classify_image(self):
-        from config.classification_model import Classification_Model
         model = Classification_Model()
-        print("\nTrain: ", TRAIN)
-        if not os.path.exists("model/classification_model.pt"):
-            model.train(TRAIN)
-        model.load_model()
-        # model.predict_class(TEST)
+        print("\nTrain Annotation: ", TRAIN_ANNOTATION)
+        if not os.path.exists("model/classification_model.h5"):
+            model.train(TRAIN_ANNOTATION)
+        model.predict_class(RESULT)
 
 
-        
+    def _getfilepaths(self, target_directory):
+            if not target_directory:
+                return []
+
+            target_path = Path(target_directory)
+            if not target_path.exists():
+                return []
+
+            file_paths = []
+            # os.walk automatically enters every subfolder it finds
+            for root, folders, files in os.walk(str(target_path)):
+                for file in files:
+                    # os.path.join combines the folder path and file name safely
+                    full_path = os.path.join(root, file)
+                    file_paths.append(full_path)  
+            return file_paths
 
 
     

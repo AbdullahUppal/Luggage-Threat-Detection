@@ -2,6 +2,7 @@
 from keras.models import Model, load_model
 from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate
 from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from pathlib import Path
 import tensorflow as tf
 import cv2 as cv
@@ -55,24 +56,79 @@ class SegmentationModel():
         outputs = Conv2D(1, (1, 1), activation='sigmoid')(c9)
 
         self.model = Model(inputs=[inputs], outputs=[outputs])
-        self.model.compile(optimizer=Adam(), loss='binary_crossentropy', metrics=['accuracy'])
+        self.model.compile(
+            optimizer=Adam(learning_rate=1e-4),
+            loss=self.bce_dice_loss,
+            metrics=[self.dice_coefficient, self.iou_score, 'accuracy'],
+            jit_compile=False
+        )
 
-    def train_segmentation(self, train_root, annotation_root, epochs=20, batch_size=8):
+    def dice_coefficient(self, y_true, y_pred, smooth=1e-6):
+        y_true_f = tf.reshape(tf.cast(y_true, tf.float32), [-1])
+        y_pred_f = tf.reshape(tf.cast(y_pred, tf.float32), [-1])
+        intersection = tf.reduce_sum(y_true_f * y_pred_f)
+        denominator = tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f)
+        return (2.0 * intersection + smooth) / (denominator + smooth)
+
+    def iou_score(self, y_true, y_pred, smooth=1e-6):
+        y_true_f = tf.reshape(tf.cast(y_true, tf.float32), [-1])
+        y_pred_f = tf.reshape(tf.cast(y_pred, tf.float32), [-1])
+        intersection = tf.reduce_sum(y_true_f * y_pred_f)
+        union = tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) - intersection
+        return (intersection + smooth) / (union + smooth)
+
+    def bce_dice_loss(self, y_true, y_pred):
+        bce = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+        dice_loss = 1.0 - self.dice_coefficient(y_true, y_pred)
+        return bce + dice_loss
+
+    def train_segmentation(self, train_root, annotation_root, epochs=20, batch_size=2):
         train_dataset, val_dataset = self.prepare_segmentation_data(
             train_root,
-            annotation_root
+            annotation_root,
+            batch_size=batch_size
         )
+
+        model_dir = Path("model")
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        callbacks = [
+            EarlyStopping(
+                monitor='val_dice_coefficient',
+                mode='max',
+                patience=6,
+                restore_best_weights=True,
+                verbose=1
+            ),
+            ReduceLROnPlateau(
+                monitor='val_dice_coefficient',
+                mode='max',
+                factor=0.5,
+                patience=3,
+                min_lr=1e-6,
+                verbose=1
+            ),
+            ModelCheckpoint(
+                filepath=str(model_dir / "segmentation_model.keras"),
+                monitor='val_dice_coefficient',
+                mode='max',
+                save_best_only=True,
+                verbose=1
+            )
+        ]
 
         history = self.model.fit(
             train_dataset,
             validation_data=val_dataset,
-            epochs=epochs
+            epochs=epochs,
+            callbacks=callbacks,
+            verbose=2
         )
 
         self.model.save("model/segmentation_model.keras")
         return history
 
-    def prepare_segmentation_data(self, train_root, annotation_root):
+    def prepare_segmentation_data(self, train_root, annotation_root, batch_size):
         class_names = ["GUN", "knife", "shuriken"]
 
         image_paths, mask_paths = self.collect_image_mask_pairs(
@@ -86,8 +142,8 @@ class SegmentationModel():
             mask_paths
         )
 
-        train_dataset = self.make_dataset(train_images, train_masks, batch_size=8, training=True)
-        val_dataset = self.make_dataset(val_images, val_masks, batch_size=8, training=False)
+        train_dataset = self.make_dataset(train_images, train_masks, batch_size=batch_size, training=True)
+        val_dataset = self.make_dataset(val_images, val_masks, batch_size=batch_size, training=False)
 
         return train_dataset, val_dataset
 
@@ -159,7 +215,7 @@ class SegmentationModel():
         mask_bytes = tf.io.read_file(mask_path)
         mask = tf.io.decode_image(mask_bytes, channels=1, expand_animations=False)
         mask = tf.image.resize(mask, image_size, method='nearest')
-        mask = tf.cast(mask, tf.float32) / 255.0
+        mask = tf.cast(mask, tf.float32)
         mask = tf.where(mask > 0.5, 1.0, 0.0)
         return mask
     
@@ -188,11 +244,19 @@ class SegmentationModel():
         model_path_h5 = Path("model/segmentation_model.h5")
 
         if model_path_keras.exists():
-            self.model = load_model(str(model_path_keras))
+            self.model = load_model(str(model_path_keras), compile=False)
         elif model_path_h5.exists():
-            self.model = load_model(str(model_path_h5))
+            self.model = load_model(str(model_path_h5), compile=False)
         else:
             raise FileNotFoundError("No segmentation model found in model/ directory.")
+
+        # Recompile after loading to avoid deserializing older bound-method objects.
+        self.model.compile(
+            optimizer=Adam(learning_rate=1e-4),
+            loss=self.bce_dice_loss,
+            metrics=[self.dice_coefficient, self.iou_score, 'accuracy'],
+            jit_compile=False
+        )
 
         return self.model
 
@@ -216,10 +280,19 @@ class SegmentationModel():
         blended = cv.addWeighted(image, 0.7, overlay, 0.3, 0)
 
         if save_output:
-            
-            result_annotation_path = str(Path(RESULT + '\\segment_images').with_name(f"{Path(image_path).stem}.png"))
-            resulted_image_path = str(Path(RESULT + '\\result_annotation').with_name(f"{Path(image_path).stem}.png"))
-            cv.imwrite(resulted_image_path, binary_mask)
-            cv.imwrite(result_annotation_path, blended)
+            result_root = Path(RESULT)
+            segment_dir = result_root / "segment_images"
+            annotation_dir = result_root / "result_annotation"
+            segment_dir.mkdir(parents=True, exist_ok=True)
+            annotation_dir.mkdir(parents=True, exist_ok=True)
+
+            stem_name = Path(image_path).stem
+            result_annotation_path = segment_dir / f"{stem_name}.png"
+            resulted_image_path = annotation_dir / f"{stem_name}.png"
+
+            if not cv.imwrite(str(resulted_image_path), binary_mask):
+                raise IOError(f"Failed to save binary mask: {resulted_image_path}")
+            if not cv.imwrite(str(result_annotation_path), blended):
+                raise IOError(f"Failed to save blended annotation: {result_annotation_path}")
 
         return binary_mask, blended
