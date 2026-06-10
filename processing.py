@@ -1,11 +1,14 @@
 from config.segementation_model import SegmentationModel
+from config.classification_model import Classification_Model
+
 import os
-from constants import TRAIN, TRAIN_ANNOTATION
+from pathlib import Path
+from constants import TRAIN, TRAIN_ANNOTATION, TEST, RESULT
 class Processing():
     # This init will act as the main process function of the class
     def __init__(self):
-        self.segment_image()
-        # self.classify_image()
+        # self.segment_image()
+        self.classify_image()
         
     def segment_image(self):
         segment_model = SegmentationModel()
