@@ -1,108 +1,138 @@
 # Luggage Threat Detection
 
-A computer vision system for automated detection of prohibited items in luggage for enhanced public safety at airports, malls, and cargo terminals.
+A computer vision pipeline for automated threat screening in X-ray luggage imagery.
 
-## Project Overview
+## What The Current Code Does
 
-This project implements an automated system that:
-1. **Classifies** baggage images as safe or threat
-2. **Identifies** threat types (gun, knife, shuriken)
-3. **Segments** threat object regions from baggage images
+The project is organized into two tasks:
 
-## Current Implementation
+1. Segmentation of threat regions from luggage scans
+2. Binary classification of segmented results as `safe` or `threat`
 
-The codebase has been consolidated into a modular pipeline with the following structure:
+Current runtime behavior in `processing.py`:
 
-### Core Components
+- By default, only `classify_image()` is executed when running `python main.py`.
+- `segment_image()` exists and can be enabled manually in `Processing.__init__`.
 
-- **`main.py`** - Entry point for the pipeline
-- **`processing.py`** - Main processing orchestration
-  - Segmentation model training and inference
-  - Classification model training and inference
-- **`constants.py`** - Configuration and path constants
-- **`config/`** - Model configuration modules
-  - `segmentation_model.py` - Segmentation model implementation
-  - `classification_model.py` - Classification model implementation
+## Project Structure
 
-### Dependencies
+- `main.py`: sets TensorFlow environment flags and starts `Processing()`.
+- `processing.py`: pipeline orchestration (segmentation + classification).
+- `constants.py`: loads `.env` and exposes path constants.
+- `config/classification_model.py`: CNN training/inference for binary classification.
+- `config/segementation_model.py`: U-Net-like segmentation model.
+- `final_output.json`: classification output grouped by predicted class.
 
+## Environment Configuration
+
+Create a `.env` file in the project root and define:
+
+- `TRAIN`: root directory for segmentation training images.
+- `TRAIN_ANNOTATION`: root directory for segmentation masks.
+- `TEST`: root directory of test images used by segmentation inference.
+- `TEST_ANNOTATION`: currently loaded but not used in pipeline logic.
+- `RESULT`: output root directory for segmentation artifacts.
+
+Expected segmentation subfolders under `TRAIN` and `TRAIN_ANNOTATION`:
+
+- `GUN`
+- `knife`
+- `shuriken`
+
+## Pipeline Details
+
+### 1. Segmentation (`SegmentationModel`)
+
+- Architecture: U-Net style encoder-decoder with skip connections.
+- Input size: `512 x 512 x 3`.
+- Loss: BCE + Dice loss.
+- Metrics: Dice coefficient, IoU, accuracy.
+- Saved model path: `model/segmentation_model.keras` (fallback load from `.h5` is supported).
+
+When `segment_image()` runs:
+
+- If no segmentation model exists (`.keras` or `.h5`), training starts.
+- Test images are loaded from `TEST` recursively.
+- For each image:
+  - Binary mask is predicted.
+  - Overlay image is generated.
+  - Files are saved to:
+    - `<RESULT>/result_annotation/<name>.png` (binary mask)
+    - `<RESULT>/segment_images/<name>.png` (overlay)
+
+### 2. Classification (`Classification_Model`)
+
+- Architecture: custom CNN with Conv-BN blocks and dense head.
+- Input size: `512 x 512 x 3`.
+- Classes: `safe`, `threat`.
+- Saved model path: `model/classification_model.h5`.
+
+Training behavior:
+
+- If model file does not exist, training is run using `TRAIN_ANNOTATION` as input root.
+- The `safe` class is auto-generated if missing by creating synthetic images under `<TRAIN_ANNOTATION>/safe`.
+
+Inference behavior:
+
+- Predicts on `<RESULT>/result_annotation` using `image_dataset_from_directory`.
+- Writes grouped results to `final_output.json`.
+
+`final_output.json` format:
+
+```json
+{
+  "threat": [
+    {
+      "file_name": "example.png",
+      "predicted_class": "threat",
+      "confidence": "99.12%"
+    }
+  ],
+  "safe": []
+}
 ```
-pandas==3.0.3
-opencv-python==4.13.0.92
-python-dotenv==1.2.2
-keras==3.14.1
-matplotlib==3.10.9
-tensorflow==2.21.0
-```
 
-## Dataset
+## Installation
 
-The system uses a structured dataset with:
-- **Threat classes:** gun, knife, shuriken
-- **Safe images:** non-threat samples
-- **Structure:** Train/test splits with corresponding annotation masks
-- **Details:** See [Dataset folder](https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing)
-
-## Model Architecture
-
-### Segmentation Pipeline
-- Trains on annotated threat images
-- Uses mask-based supervision for pixel-level segmentation
-- Model saved to `model/segmentation_model.pt`
-
-### Classification Pipeline
-- Classifies images as safe or threat
-- Supports multi-class threat categorization
-- Model saved to `model/classification_model.pt`
-
-## Evaluation Metrics
-
-### Classification
-- Overall accuracy
-- Confusion matrix
-- Per-class precision, recall, F1-score
-
-### Segmentation
-- Dice coefficient (F1 score)
-- Intersection over Union (IoU)
-
-## Configuration
-
-Environment variables are loaded via `.env` file. Key paths configured in `constants.py`:
-
-- `TRAIN_*` - Training data paths for each threat class
-- `TEST_*` - Test data paths
-- `*_ANNOTATION` - Segmentation mask paths
-
-## Usage
+### Windows / Standard
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+```
 
-# Configure dataset paths in .env file
-# Run the pipeline
+### Linux (CUDA-ready variant in repo)
+
+```bash
+pip install -r requirements-linux.txt
+```
+
+## Run
+
+```bash
 python main.py
 ```
 
-## Project Status
+## GPU Reliability (Linux / WSL Recommended)
 
-✅ **Completed:**
-- Modular pipeline architecture
-- Standardized preprocessing
-- Reproducible train/test workflow
-- Model training and evaluation for both tasks
+For more reliable GPU utilization, run training/inference on native Linux or WSL2 (Ubuntu) instead of Windows-native Python.
 
-🔄 **In Progress:**
-- Fine-tuning model performance
-- Comprehensive evaluation reporting
-- Documentation and sample outputs
+- Use `requirements-linux.txt` for GPU-oriented setup.
+- In WSL2, install NVIDIA drivers on Windows host + CUDA support for WSL.
+- Keep the project and dataset inside the Linux filesystem (for example under `~/`) for better I/O performance.
 
-For detailed results and analysis, see the [full report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view).
+Quick TensorFlow GPU check:
 
-## License
+```bash
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```
 
-This project is for research and security screening purposes.
+If the output list is non-empty, TensorFlow can see your GPU.
+
+## Important Notes
+
+- Default entry flow currently runs classification only.
+- If segmentation is skipped, `<RESULT>/result_annotation` must already contain images for classification inference.
+- Segmentation and classification are currently binary threat detectors, not per-threat-type classifiers.
 
 ## References
 
