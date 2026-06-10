@@ -1,108 +1,130 @@
 # Luggage Threat Detection
 
-A computer vision system for automated detection of prohibited items in luggage for enhanced public safety at airports, malls, and cargo terminals.
+Luggage Threat Detection is a PyTorch-based computer vision pipeline for automated screening of baggage X-ray style images. The system supports threat segmentation and threat-type classification to assist safety workflows in airports, malls, and cargo terminals.
 
 ## Project Overview
 
-This project implements an automated system that:
-1. **Classifies** baggage images as safe or threat
-2. **Identifies** threat types (gun, knife, shuriken)
-3. **Segments** threat object regions from baggage images
+The implemented pipeline provides:
 
-## Current Implementation
+1. Pixel-level segmentation of threat objects from baggage images
+2. Multi-class threat classification (gun, knife, shuriken, safe)
+3. Model training, loading, and inference in a modular structure
 
-The codebase has been consolidated into a modular pipeline with the following structure:
+## Implementation Summary
 
-### Core Components
+The repository is organized into reusable modules:
 
-- **`main.py`** - Entry point for the pipeline
-- **`processing.py`** - Main processing orchestration
-  - Segmentation model training and inference
-  - Classification model training and inference
-- **`constants.py`** - Configuration and path constants
-- **`config/`** - Model configuration modules
-  - `segmentation_model.py` - Segmentation model implementation
-  - `classification_model.py` - Classification model implementation
+- `main.py`
+  - Entry point that creates the processing pipeline object
+- `utils/processing.py`
+  - Orchestrates segmentation and classification steps
+  - Runs segmentation inference over test images and stores generated masks
+- `constants.py`
+  - Loads runtime paths from `.env`
+- `config/segementation_model.py`
+  - PyTorch U-Net style segmentation model
+  - Dataset pairing, training loop, model save/load, mask inference
+- `config/classification_model.py`
+  - PyTorch CNN classifier
+  - Dataset preparation, train/validation split, training loop, prediction export
 
-### Dependencies
+## Dependencies
 
+Install dependencies from `requirements.txt`:
+
+```bash
+pandas==2.2.3
+opencv-python==4.10.0.84
+python-dotenv==1.0.1
+matplotlib==3.8.4
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
 ```
-pandas==3.0.3
-opencv-python==4.13.0.92
-python-dotenv==1.2.2
-keras==3.14.1
-matplotlib==3.10.9
-tensorflow==2.21.0
-```
 
-## Dataset
+## Dataset Structure
 
-The system uses a structured dataset with:
-- **Threat classes:** gun, knife, shuriken
-- **Safe images:** non-threat samples
-- **Structure:** Train/test splits with corresponding annotation masks
-- **Details:** See [Dataset folder](https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing)
+Expected dataset layout includes train/test image folders and annotation masks.
 
-## Model Architecture
+- Threat classes: `GUN`, `knife`, `shuriken`
+- Safe class: `safe`
+- Training masks: threat-class masks aligned by filename
 
-### Segmentation Pipeline
-- Trains on annotated threat images
-- Uses mask-based supervision for pixel-level segmentation
-- Model saved to `model/segmentation_model.pt`
+Referenced dataset and report:
 
-### Classification Pipeline
-- Classifies images as safe or threat
-- Supports multi-class threat categorization
-- Model saved to `model/classification_model.pt`
+- Dataset: [Google Drive folder](https://drive.google.com/drive/folders/1eOoN5LSE9OEyWFfA7ntPfZTOQjvdpRkB?usp=sharing)
+- Full report: [Results report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view)
 
-## Evaluation Metrics
+## Model Artifacts
 
-### Classification
-- Overall accuracy
-- Confusion matrix
-- Per-class precision, recall, F1-score
+Generated model files:
 
-### Segmentation
-- Dice coefficient (F1 score)
-- Intersection over Union (IoU)
+- Segmentation model: `model/segmentation_model.pt`
+- Classification model: `model/classification_model.pt`
+
+Note: `model/` is ignored by `.gitignore` and is intended for local runtime artifacts.
+
+Generated output files:
+
+- Segmented masks: `DIP Data Upload/result/`
+- Classification summary: `classification_result.json`
+
+Note: `DIP Data Upload/` is ignored by `.gitignore`, so generated images/results remain local.
 
 ## Configuration
 
-Environment variables are loaded via `.env` file. Key paths configured in `constants.py`:
+Create a `.env` file in the project root and define:
 
-- `TRAIN_*` - Training data paths for each threat class
-- `TEST_*` - Test data paths
-- `*_ANNOTATION` - Segmentation mask paths
+```env
+TRAIN=path_to_training_images
+TRAIN_ANNOTATION=path_to_training_masks
+TEST=path_to_test_images
+```
+
+These values are loaded by `constants.py` at runtime.
 
 ## Usage
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+1. Install dependencies:
 
-# Configure dataset paths in .env file
-# Run the pipeline
+```bash
+pip install -r requirements.txt
+```
+
+2. Configure dataset paths in `.env`.
+
+3. Run the pipeline:
+
+```bash
 python main.py
 ```
 
+### What Happens On Run
+
+- Segmentation model is loaded from disk if available; otherwise it is trained and then saved.
+- Test images are processed and mask outputs are written to `DIP Data Upload/result/`.
+- Classification module is available in the processing pipeline for threat-label prediction and result export.
+
+## Evaluation Signals
+
+Current training loops report:
+
+- Segmentation: train and validation BCE loss per epoch
+- Classification: train/validation loss and accuracy per epoch
+
 ## Project Status
 
-✅ **Completed:**
-- Modular pipeline architecture
-- Standardized preprocessing
-- Reproducible train/test workflow
-- Model training and evaluation for both tasks
+Completed:
 
-🔄 **In Progress:**
-- Fine-tuning model performance
-- Comprehensive evaluation reporting
-- Documentation and sample outputs
-
-For detailed results and analysis, see the [full report](https://drive.google.com/file/d/1CPeFO8LYqyjLG0fbqAihXEbUZlZrKtz2/view).
+- End-to-end modular PyTorch implementation
+- Segmentation and classification model training pipelines
+- Model persistence and reload flow
+- Inference output generation for segmentation and classification
+- Environment-driven path configuration
 
 ## License
 
-This project is for research and security screening purposes.
+This project is intended for research and security screening applications.
 
 ## References
 
