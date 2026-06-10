@@ -13,6 +13,7 @@ import os
 import numpy as np
 import cv2 as cv
 from pathlib import Path
+import json
 
 # Configure GPU
 gpus = tf.config.list_physical_devices('GPU')
@@ -222,6 +223,8 @@ class Classification_Model:
         class_names = ['safe', 'threat'] # Must match the alphabetical order of your training folders
 
         print("\n--- RESULTS ---")
+        result = {'threat':[], 'safe': []}
+        
         # Loop through the results (we will just print the first 20 so it doesn't flood your console)
         for i in range(0,len(file_paths)):
             
@@ -232,6 +235,8 @@ class Classification_Model:
             predicted_index = np.argmax(predictions[i])
             predicted_class = class_names[predicted_index]
             confidence = np.max(predictions[i]) * 100
-            
+            result[predicted_class].append({"file_name":file_name, "predicted_class":predicted_class, "confidence": f"{confidence:.2f}%"})
             print(f"Image: {file_name} | Prediction: {predicted_class} | Confidence: {confidence:.2f}%")
+        with open("final_output.json", "w") as f:
+            json.dump(result, f, indent=2)
         print(f"\nSuccessfully processed {len(file_paths)} images!")
