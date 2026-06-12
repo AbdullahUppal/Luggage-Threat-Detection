@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Tuple
 from PIL import Image
 
-import cv2
+import cv2 as cv
 import numpy as np
 import torch
 import torch.nn as nn
@@ -84,23 +84,22 @@ class SegmentationThreatDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         image_path, mask_path = self.pairs[idx]
 
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        image = cv.imread(image_path, cv.IMREAD_COLOR)
         if image is None:
             raise ValueError(f"Unable to read image: {image_path}")
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, self.image_size, interpolation=cv2.INTER_LINEAR)
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        image = cv.resize(image, self.image_size, interpolation=cv.INTER_LINEAR)
         image = image.astype(np.float32) / 255.0
         image = np.transpose(image, (2, 0, 1))
 
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        mask = cv.imread(mask_path, cv.IMREAD_GRAYSCALE)
         if mask is None:
             raise ValueError(f"Unable to read mask: {mask_path}")
-        mask = cv2.resize(mask, self.image_size, interpolation=cv2.INTER_NEAREST)
+        mask = cv.resize(mask, self.image_size, interpolation=cv.INTER_NEAREST)
         mask = (mask > 0).astype(np.float32)
         mask = np.expand_dims(mask, axis=0)
 
-        return torch.from_numpy(image), torch.from_numpy(mask)
-
+        return torch.from_numpy(image), torch.from_numpy(mask)  
 
 class SegmentationModel:
     def __init__(self):
@@ -181,7 +180,7 @@ class SegmentationModel:
 
         return train_loader, val_loader
 
-    def train_segmentation(self, train_root: str, annotation_root: str, epochs: int = 20, batch_size: int = 8):
+    def train_segmentation(self, train_root: str, annotation_root: str, epochs: int = 50, batch_size: int = 8):
         train_loader, val_loader = self.prepare_segmentation_data(
             train_root=train_root,
             annotation_root=annotation_root,

@@ -3,6 +3,10 @@ import os
 
 load_dotenv()
 
-TRAIN = 'DIP Data Upload/train'
+TRAIN = os.getenv('TRAIN')
 
-TRAIN_ANNOTATION = 'DIP Data Upload/train_annotations'
+TRAIN_ANNOTATION = os.getenv('TRAIN_ANNOTATION')
+
+TEST = os.getenv('TEST')
+
+RESULT = os.getenv('RESULT')
