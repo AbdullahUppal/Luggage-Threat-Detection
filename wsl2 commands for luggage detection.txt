@@ -1,0 +1,37 @@
+wsl2 commands: wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+
+conda create --name ml_env python=3.10
+conda activate ml_env
+
+commands for GPU access:
+
+nvidia-smi
+ls -l /usr/lib/wsl/lib/libcuda.so.1
+
+python - <<'PY'
+import tensorflow as tf
+print("TF:", tf.__version__)
+print("Built with CUDA:", tf.test.is_built_with_cuda())
+print("GPUs:", tf.config.list_physical_devices('GPU'))
+PY
+
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$CONDA_PREFIX/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cublas/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cuda_runtime/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cudnn/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cufft/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/curand/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cusolver/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cusparse/lib:$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/nccl/lib:$LD_LIBRARY_PATH
+
+python - <<'PY'
+import tensorflow as tf
+print(tf.config.list_physical_devices('GPU'))
+PY
+
+source ~/.bashrc
+
+python - <<'PY'
+import ctypes
+libs=["libcuda.so.1","libcudart.so.12","libcudnn.so.9","libcublas.so.12","libcublasLt.so.12"]
+for x in libs:
+    try:
+        ctypes.CDLL(x)
+        print("OK",x)
+    except Exception as e:
+        print("MISS",x,e)
+PY
